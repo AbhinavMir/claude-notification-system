@@ -63,7 +63,12 @@ async function ensureWebhook() {
         console.error("setAgentWebhook skipped:", e.message);
       }
       return url;
-    })();
+    })().catch((e) => {
+      // Don't cache a failed tunnel (e.g. ngrok domain already claimed by another
+      // session). Reset so a later call can retry, and rethrow for this caller.
+      webhookReady = null;
+      throw e;
+    });
   }
   return webhookReady;
 }
@@ -149,7 +154,16 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         };
       }
 
-      await ensureWebhook();
+      // Bring up the webhook tunnel. If it can't start (e.g. another Claude Code
+      // session already holds the ngrok domain), still place the call — we just
+      // won't get the transcript back, so we return pending instead of failing.
+      let webhookUp = true;
+      try {
+        await ensureWebhook();
+      } catch (e) {
+        webhookUp = false;
+        console.error("webhook unavailable, placing call without transcript:", e.message);
+      }
 
       // 1) iMessage first
       try {
@@ -167,7 +181,26 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         prompt: spoken,
       });
 
-      // 3) Long-poll until the call ends or we time out
+      // 3) If the webhook is up, long-poll for the transcript; otherwise the call
+      // is placed but its result routes elsewhere — return pending with a note.
+      if (!webhookUp) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  status: "pending",
+                  call_id: callId,
+                  note: "Call placed, but the webhook tunnel is held by another session, so the transcript can't be read here. The user was still phoned.",
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      }
       const outcome = await awaitCall(callId, cfg.callTimeoutMs);
       return { content: [{ type: "text", text: JSON.stringify(outcome, null, 2) }] };
     }

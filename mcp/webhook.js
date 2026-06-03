@@ -79,10 +79,18 @@ export async function startWebhook({ port, ngrokAuthtoken, ngrokDomain }) {
     res.sendStatus(200);
   });
 
-  await new Promise((resolve) => app.listen(port, resolve));
+  // Bind an ephemeral port (0). ngrok forwards the reserved DOMAIN to whatever
+  // local port we land on, so there's no need for a fixed port — and no
+  // EADDRINUSE collision when multiple Claude Code sessions each spawn their own
+  // copy of this server. The `port` arg is ignored (kept for compatibility).
+  const server = await new Promise((resolve, reject) => {
+    const s = app.listen(0, () => resolve(s));
+    s.on("error", reject); // surface bind errors instead of crashing the process
+  });
+  const localPort = server.address().port;
 
   const listener = await ngrok.connect({
-    addr: port,
+    addr: localPort,
     authtoken: ngrokAuthtoken,
     ...(ngrokDomain ? { domain: ngrokDomain } : {}),
   });
