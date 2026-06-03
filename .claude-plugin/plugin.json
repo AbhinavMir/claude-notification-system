@@ -1,0 +1,12 @@
+{
+  "name": "claude-notification-system",
+  "version": "0.1.0",
+  "description": "Messages you on iMessage, calls you via Retell, and acts on what you say over the call. Reports if the laptop is on battery. Also receives inbound calls.",
+  "author": { "name": "august" },
+  "mcpServers": {
+    "claude-notification-system": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/mcp/server.js"]
+    }
+  }
+}

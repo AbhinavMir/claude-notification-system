@@ -1,0 +1,41 @@
+{
+  "name": "claude-notification-system",
+  "version": "0.1.0",
+  "description": "MCP server that messages you on iMessage, calls you via Retell, and acts on what you say. macOS.",
+  "type": "module",
+  "bin": {
+    "claude-notification-system": "server.js"
+  },
+  "files": [
+    "server.js",
+    "power.js",
+    "imessage.js",
+    "retell.js",
+    "webhook.js",
+    "skill/SKILL.md",
+    "README.md"
+  ],
+  "os": [
+    "darwin"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [
+    "mcp",
+    "claude",
+    "retell",
+    "imessage",
+    "notification"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "@ngrok/ngrok": "^1.4.1",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2"
+  }
+}
