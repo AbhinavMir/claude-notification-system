@@ -77,13 +77,18 @@ const TOOLS = [
   {
     name: "reach_me",
     description:
-      "Message the user on iMessage, then call them via Retell speaking the given prompt, and wait for their answer. The prompt is the full thing to say, e.g. \"Hi, Cladia here, just finished the work. Anything else?\". Blocks until the call ends (up to 5 min) and returns the transcript with the user's instructions. If it times out, returns a call_id to use with get_result. Adds a battery note automatically when the laptop is unplugged.",
+      "Reach the user. With channel \"call\" (default): iMessage the prompt, then call via Retell speaking it, block until the call ends (up to 5 min), and return the transcript with the user's instructions (or a call_id if it times out). With channel \"text\": just send the iMessage and return immediately — no call, no waiting. Use \"text\" for a heads-up/FYI you don't need an answer to; use \"call\" when you're blocked and need a decision. Adds a battery note automatically when the laptop is unplugged.",
     inputSchema: {
       type: "object",
       properties: {
         prompt: {
           type: "string",
           description: "The full message/question to text and speak to the user.",
+        },
+        channel: {
+          type: "string",
+          enum: ["call", "text"],
+          description: "\"call\" (default) texts then phones and waits for a reply; \"text\" only sends the iMessage and returns immediately.",
         },
       },
       required: ["prompt"],
@@ -116,9 +121,14 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
     if (name === "reach_me") {
       const basePrompt = String(args?.prompt || "").trim();
       if (!basePrompt) throw new Error("prompt is required");
+      const channel = args?.channel === "text" ? "text" : "call";
 
-      const missing = ["retellApiKey", "agentId", "fromNumber", "myPhone", "ngrokAuthtoken"]
-        .filter((k) => !cfg[k]);
+      // Text-only needs just an iMessage handle; calling needs the full stack.
+      const required =
+        channel === "text"
+          ? ["imessageHandle"]
+          : ["retellApiKey", "agentId", "fromNumber", "myPhone", "ngrokAuthtoken"];
+      const missing = required.filter((k) => !cfg[k]);
       if (missing.length) {
         throw new Error(
           `Missing config: ${missing.join(", ")}. Set them as env vars or in ` +
@@ -128,6 +138,16 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
 
       const power = await powerStatus();
       const spoken = power.phrase ? `${basePrompt} ${power.phrase}` : basePrompt;
+
+      // Text-only: send the iMessage and return, no call.
+      if (channel === "text") {
+        await sendIMessage(cfg.imessageHandle, spoken);
+        return {
+          content: [
+            { type: "text", text: JSON.stringify({ status: "texted", channel: "text" }, null, 2) },
+          ],
+        };
+      }
 
       await ensureWebhook();
 

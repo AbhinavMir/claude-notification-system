@@ -25,10 +25,14 @@ Don't call for trivia you can figure out yourself. Call when you'd otherwise be 
 
 ## How to use
 
-1. Call **`reach_me`** with `prompt` set to the **entire** thing to say — it is spoken
-   verbatim. Write it as natural speech, e.g.
-   `"Hello, Cladia calling from your computer, I had a quick question. <your question>"`.
-   - It texts the user first, then phones them.
+1. Call **`reach_me`** with `prompt` set to the **entire** thing to say. Pick a `channel`:
+   - `channel: "call"` (default) — texts then phones, waits for the spoken reply, returns
+     the transcript. Use when you're blocked and need a decision/answer.
+   - `channel: "text"` — sends only the iMessage and returns immediately. Use for a
+     heads-up/FYI ("done with X", "kicked off the build") you don't need a reply to.
+   - For a call, write the prompt as natural speech, e.g.
+     `"Hello, Cladia calling from your computer, I had a quick question. <your question>"`.
+   - A call texts the user first, then phones them.
    - A battery warning is appended automatically when the laptop is unplugged — do not
      add one yourself.
    - It blocks until the call ends (up to 5 min) and returns the transcript. Read the
