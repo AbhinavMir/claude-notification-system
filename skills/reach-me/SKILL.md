@@ -9,6 +9,19 @@ This skill is backed by the `claude-notification-system` MCP server. Use its too
 contact the user through iMessage and a Retell phone call instead of just printing text
 they may not see.
 
+## HARD RULE — only call the MCP tool
+
+ONLY reach the user by invoking the **`reach_me` MCP tool**. NEVER write, copy, or run your
+own script, driver, or node file (e.g. a `reach_driver.mjs`) that imports this project's
+modules or calls Retell/ngrok directly.
+
+The MCP server is already running and owns the webhook tunnel (port 8787). A second process
+cannot bind that port — your driver will silently fall back to "place call only" and
+**throw away the transcript**, so you'll act on a guess instead of the user's real answer.
+The `reach_me` tool reuses the running server's tunnel and returns the transcript inline.
+If the tool isn't available, the server isn't loaded — restart the session; do NOT build a
+workaround.
+
 ## When to use
 
 **Call the user whenever you hit a problem you can't resolve on your own** instead of
