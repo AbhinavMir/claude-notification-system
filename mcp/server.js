@@ -9,13 +9,13 @@ import dotenv from "dotenv";
 
 import { powerStatus } from "./power.js";
 import { sendIMessage } from "./imessage.js";
-import { placeCall, setAgentWebhook } from "./retell.js";
+import { placeCall } from "./retell.js";
 import {
-  startWebhook,
-  awaitCall,
-  getResult,
-  drainInbound,
-} from "./webhook.js";
+  ensureDaemon,
+  pollResult,
+  fetchResult,
+  fetchInbound,
+} from "./daemon-client.js";
 
 // Config resolution order (later loads do NOT override already-set vars):
 //   1. Real env vars (e.g. passed via the MCP server's `env` block) — highest priority
@@ -38,40 +38,11 @@ const cfg = {
   imessageHandle: process.env.IMESSAGE_HANDLE || process.env.MY_PHONE_NUMBER,
   ngrokAuthtoken: process.env.NGROK_AUTHTOKEN,
   ngrokDomain: process.env.NGROK_DOMAIN,
-  port: Number(process.env.NOTIFY_PORT || 8787),
   callTimeoutMs: Number(process.env.CALL_TIMEOUT_MS || 5 * 60 * 1000),
 };
 
-let webhookReady = null; // promise; lazy-start the tunnel on first call
-
-async function ensureWebhook() {
-  if (!webhookReady) {
-    webhookReady = (async () => {
-      const url = await startWebhook({
-        port: cfg.port,
-        ngrokAuthtoken: cfg.ngrokAuthtoken,
-        ngrokDomain: cfg.ngrokDomain,
-      });
-      console.error("Retell webhook URL (set this in the Retell dashboard):", url);
-      // Published Retell agents reject webhook updates; that's fine — the call
-      // still goes through, we just can't auto-point the webhook here. Set it
-      // once in the Retell dashboard (account or agent webhook = this ngrok URL)
-      // to get transcripts back instead of relying on the timeout fallback.
-      try {
-        await setAgentWebhook(cfg.retellApiKey, cfg.agentId, url);
-      } catch (e) {
-        console.error("setAgentWebhook skipped:", e.message);
-      }
-      return url;
-    })().catch((e) => {
-      // Don't cache a failed tunnel (e.g. ngrok domain already claimed by another
-      // session). Reset so a later call can retry, and rethrow for this caller.
-      webhookReady = null;
-      throw e;
-    });
-  }
-  return webhookReady;
-}
+// The tunnel/webhook now lives in a single shared daemon (daemon.js). This
+// server just makes sure it's up and then talks to it over localhost.
 
 const server = new Server(
   { name: "claude-notification-system", version: "0.1.0" },
@@ -154,15 +125,15 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         };
       }
 
-      // Bring up the webhook tunnel. If it can't start (e.g. another Claude Code
-      // session already holds the ngrok domain), still place the call — we just
-      // won't get the transcript back, so we return pending instead of failing.
-      let webhookUp = true;
+      // Make sure the shared webhook daemon is running (spawns it if not).
+      // Non-fatal: if it won't come up we still place the call, just without a
+      // transcript to poll for.
+      let daemonUp = true;
       try {
-        await ensureWebhook();
+        await ensureDaemon();
       } catch (e) {
-        webhookUp = false;
-        console.error("webhook unavailable, placing call without transcript:", e.message);
+        daemonUp = false;
+        console.error("daemon unavailable, placing call without transcript:", e.message);
       }
 
       // 1) iMessage first
@@ -173,7 +144,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         console.error("iMessage failed:", e.message);
       }
 
-      // 2) Place the call
+      // 2) Place the call — call_id uniquely ties this call to this session.
       const callId = await placeCall(cfg.retellApiKey, {
         fromNumber: cfg.fromNumber,
         toNumber: cfg.myPhone,
@@ -181,9 +152,8 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         prompt: spoken,
       });
 
-      // 3) If the webhook is up, long-poll for the transcript; otherwise the call
-      // is placed but its result routes elsewhere — return pending with a note.
-      if (!webhookUp) {
+      // 3) Poll the shared daemon for THIS call_id's transcript.
+      if (!daemonUp) {
         return {
           content: [
             {
@@ -192,7 +162,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
                 {
                   status: "pending",
                   call_id: callId,
-                  note: "Call placed, but the webhook tunnel is held by another session, so the transcript can't be read here. The user was still phoned.",
+                  note: "Call placed, but the webhook daemon isn't reachable, so the transcript can't be read here. The user was still phoned. Retry get_result later.",
                 },
                 null,
                 2
@@ -201,26 +171,17 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
           ],
         };
       }
-      const outcome = await awaitCall(callId, cfg.callTimeoutMs);
+      const outcome = await pollResult(callId, cfg.callTimeoutMs);
       return { content: [{ type: "text", text: JSON.stringify(outcome, null, 2) }] };
     }
 
     if (name === "get_result") {
-      const t = getResult(String(args?.call_id || ""));
-      return {
-        content: [
-          {
-            type: "text",
-            text: t
-              ? JSON.stringify({ status: "completed", transcript: t }, null, 2)
-              : JSON.stringify({ status: "pending" }, null, 2),
-          },
-        ],
-      };
+      const j = await fetchResult(String(args?.call_id || ""));
+      return { content: [{ type: "text", text: JSON.stringify(j, null, 2) }] };
     }
 
     if (name === "get_pending_messages") {
-      const items = drainInbound();
+      const items = await fetchInbound();
       return { content: [{ type: "text", text: JSON.stringify(items, null, 2) }] };
     }
 

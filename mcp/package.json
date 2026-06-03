@@ -8,10 +8,11 @@
   },
   "files": [
     "server.js",
+    "daemon.js",
+    "daemon-client.js",
     "power.js",
     "imessage.js",
     "retell.js",
-    "webhook.js",
     "skill/SKILL.md",
     "README.md"
   ],

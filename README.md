@@ -12,8 +12,12 @@ you when the laptop is on battery, and it answers inbound calls too.
 - `get_result(call_id)` — fetch a transcript if `reach_me` timed out.
 - `get_pending_messages()` — transcripts of calls **you** placed to the agent.
 
-Webhooks reach your laptop through a built-in **ngrok** tunnel started automatically on the
-first call — Retell needs no fixed public URL.
+Webhooks reach your laptop through a built-in **ngrok** tunnel. Every Claude Code session
+spawns its own copy of this MCP server, so the tunnel does **not** live in the server —
+it lives in a single shared **daemon** (`daemon.js`, on `127.0.0.1:8788`) that the first
+call auto-starts and all sessions share. Each session places its call, gets a unique
+`call_id`, and polls the daemon for that id's transcript — so calls from different sessions
+never cross, and there's only ever one tunnel/one ngrok domain in use.
 
 ## Install (npm, one line)
 
