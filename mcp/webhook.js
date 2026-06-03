@@ -65,7 +65,8 @@ function handleEvent(body) {
 }
 
 // Starts the express server + ngrok tunnel. Returns the public webhook URL.
-export async function startWebhook({ port, ngrokAuthtoken }) {
+// Pass `ngrokDomain` (a reserved ngrok domain) for a stable URL across restarts.
+export async function startWebhook({ port, ngrokAuthtoken, ngrokDomain }) {
   const app = express();
   app.use(express.json({ limit: "2mb" }));
   app.get("/health", (_req, res) => res.send("ok"));
@@ -83,6 +84,7 @@ export async function startWebhook({ port, ngrokAuthtoken }) {
   const listener = await ngrok.connect({
     addr: port,
     authtoken: ngrokAuthtoken,
+    ...(ngrokDomain ? { domain: ngrokDomain } : {}),
   });
   return `${listener.url()}/webhook`;
 }

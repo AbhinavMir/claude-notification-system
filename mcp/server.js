@@ -37,6 +37,7 @@ const cfg = {
   myPhone: process.env.MY_PHONE_NUMBER,
   imessageHandle: process.env.IMESSAGE_HANDLE || process.env.MY_PHONE_NUMBER,
   ngrokAuthtoken: process.env.NGROK_AUTHTOKEN,
+  ngrokDomain: process.env.NGROK_DOMAIN,
   port: Number(process.env.NOTIFY_PORT || 8787),
   callTimeoutMs: Number(process.env.CALL_TIMEOUT_MS || 5 * 60 * 1000),
 };
@@ -49,8 +50,18 @@ async function ensureWebhook() {
       const url = await startWebhook({
         port: cfg.port,
         ngrokAuthtoken: cfg.ngrokAuthtoken,
+        ngrokDomain: cfg.ngrokDomain,
       });
-      await setAgentWebhook(cfg.retellApiKey, cfg.agentId, url);
+      console.error("Retell webhook URL (set this in the Retell dashboard):", url);
+      // Published Retell agents reject webhook updates; that's fine — the call
+      // still goes through, we just can't auto-point the webhook here. Set it
+      // once in the Retell dashboard (account or agent webhook = this ngrok URL)
+      // to get transcripts back instead of relying on the timeout fallback.
+      try {
+        await setAgentWebhook(cfg.retellApiKey, cfg.agentId, url);
+      } catch (e) {
+        console.error("setAgentWebhook skipped:", e.message);
+      }
       return url;
     })();
   }

@@ -11,10 +11,17 @@ they may not see.
 
 ## When to use
 
-- You finished a task and want to confirm next steps: call with
-  "Hi, Cladia here, just finished the work. Anything else I should do?"
-- You hit a decision you can't make yourself: call with the full question.
+**Call the user whenever you hit a problem you can't resolve on your own** instead of
+guessing, stalling, or silently giving up. Specifically:
+
+- You're blocked: missing credential, ambiguous instruction, a decision only the user can
+  make, or an error you can't get past after a real attempt.
+- You need approval for something irreversible or outward-facing.
+- You finished a task and want next steps: "Hi, Cladia here, just finished the work.
+  Anything else I should do?"
 - The user said "call me when…" or "ask me by phone."
+
+Don't call for trivia you can figure out yourself. Call when you'd otherwise be stuck.
 
 ## How to use
 
